@@ -1,20 +1,17 @@
 FROM mcr.microsoft.com/playwright:v1.40.0-jammy
-
 WORKDIR /app
 
-# O SEGREDO: Criamos um ambiente onde o NPM é obrigado a ser anônimo
+# Blindagem contra o erro de token
 RUN echo "registry=https://registry.npmjs.org/" > .npmrc
 
 COPY package*.json ./
-
-# Instalamos sem auditoria para evitar travar no token
 RUN npm install --no-audit --no-fund
-
 RUN npx playwright install chromium
 
 COPY . .
 
-EXPOSE 3000
+# Mudamos para a porta 3001 para não bater com o Browserless
+EXPOSE 3001
 
-# Comando que inicia o servidor via SSE para a Evo-AI
-CMD ["npx", "-y", "@modelcontextprotocol/server-playwright", "--sse"]
+# Comando de início com a porta corrigida
+CMD ["npx", "-y", "@modelcontextprotocol/server-playwright", "--sse", "--port", "3001"]
