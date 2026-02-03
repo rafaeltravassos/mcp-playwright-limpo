@@ -2,21 +2,23 @@ FROM mcr.microsoft.com/playwright:v1.40.0-jammy
 
 WORKDIR /app
 
-# 1. Força o uso do registro público e ignora qualquer token residual
-ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
-RUN npm config set auth-type legacy
+# 1. Remove qualquer configuração residual de usuário que possa ter tokens velhos
+RUN rm -f /root/.npmrc && rm -f ~/.npmrc
 
-# 2. Cria um package.json básico para garantir a instalação limpa
-RUN echo '{"name": "mcp-server", "version": "1.0.0", "dependencies": {"@modelcontextprotocol/server-playwright": "latest"}}' > package.json
+# 2. Define o registro oficial de forma global
+RUN npm config set registry https://registry.npmjs.org/
 
-# 3. Instala o pacote explicitamente durante o Build (evita o erro do npx no boot)
-RUN npm install --no-audit --no-fund
+# 3. O TRUQUE: Define um token vazio para o registro. Isso mata o erro de "Access token expired"
+RUN npm config set //registry.npmjs.org/:_authToken ""
 
-# 4. Instala os navegadores necessários
+# 4. Instala o servidor diretamente (sem npx no build para evitar o loop de auth)
+RUN npm install @modelcontextprotocol/server-playwright --no-save --no-package-lock
+
+# 5. Instala os navegadores do Playwright
 RUN npx playwright install chromium
 
-# 5. Expõe a porta que configuramos no Coolify
+# Porta configurada no Coolify
 EXPOSE 3001
 
-# 6. Comando de inicialização usando o pacote já instalado localmente
-CMD ["npx", "@modelcontextprotocol/server-playwright", "--sse"]
+# 6. Comando de execução garantindo que ele não tente baixar nada novamente
+CMD ["npx", "-y", "@modelcontextprotocol/server-playwright", "--sse"]
