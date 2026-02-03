@@ -1,27 +1,30 @@
-# ESTÁGIO 1: O "Construtor" (Ambiente 100% limpo)
+# ESTÁGIO 1: Construção em ambiente isolado e sem rastro de tokens
 FROM node:20-slim AS builder
+
+# Mudamos o HOME para uma pasta vazia. Isso mata qualquer .npmrc herdado
+RUN mkdir /tmp/clean-home
+ENV HOME=/tmp/clean-home
 WORKDIR /app
 
-# Forçamos o NPM a ignorar qualquer token global injetado pelo ambiente
-ENV NPM_CONFIG_USERCONFIG=/tmp/.npmrc
-RUN echo "registry=https://registry.npmjs.org/" > /tmp/.npmrc
+# Forçamos o registro público e desativamos qualquer tentativa de autenticação
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set always-auth false
 
-# Instalamos o servidor em uma pasta isolada
-RUN npm install @modelcontextprotocol/server-playwright
+# Instalamos o servidor. Sem tokens, ele tratará o pacote como 100% público
+RUN npm install @modelcontextprotocol/server-playwright --no-audit --no-fund
 
-# ESTÁGIO 2: A "Execução" (Imagem do Playwright)
+# ESTÁGIO 2: Imagem final do Playwright
 FROM mcr.microsoft.com/playwright:v1.40.0-jammy
 WORKDIR /app
 
-# Copiamos apenas a pasta node_modules pronta do estágio anterior
-# Isso pula completamente o 'npm install' problemático nesta imagem
+# Copiamos a instalação limpa
 COPY --from=builder /app/node_modules ./node_modules
 
-# Instalamos apenas os navegadores necessários (este comando não usa tokens de registro)
+# Instalamos o navegador (este comando não depende de tokens do npm)
 RUN npx playwright install chromium
 
-# Configuração de porta para o Coolify
+# Porta configurada no Coolify para o seu domínio navegador.zzapp.money
 EXPOSE 3001
 
-# Comando final usando o binário que já foi baixado no estágio anterior
+# Comando final chamando o executável diretamente
 CMD ["./node_modules/.bin/mcp-server-playwright", "--sse"]
