@@ -1,24 +1,27 @@
-FROM mcr.microsoft.com/playwright:v1.40.0-jammy
-
+# ESTÁGIO 1: O "Construtor" (Ambiente 100% limpo)
+FROM node:20-slim AS builder
 WORKDIR /app
 
-# 1. Remove qualquer configuração residual de usuário que possa ter tokens velhos
-RUN rm -f /root/.npmrc && rm -f ~/.npmrc
+# Forçamos o NPM a ignorar qualquer token global injetado pelo ambiente
+ENV NPM_CONFIG_USERCONFIG=/tmp/.npmrc
+RUN echo "registry=https://registry.npmjs.org/" > /tmp/.npmrc
 
-# 2. Define o registro oficial de forma global
-RUN npm config set registry https://registry.npmjs.org/
+# Instalamos o servidor em uma pasta isolada
+RUN npm install @modelcontextprotocol/server-playwright
 
-# 3. O TRUQUE: Define um token vazio para o registro. Isso mata o erro de "Access token expired"
-RUN npm config set //registry.npmjs.org/:_authToken ""
+# ESTÁGIO 2: A "Execução" (Imagem do Playwright)
+FROM mcr.microsoft.com/playwright:v1.40.0-jammy
+WORKDIR /app
 
-# 4. Instala o servidor diretamente (sem npx no build para evitar o loop de auth)
-RUN npm install @modelcontextprotocol/server-playwright --no-save --no-package-lock
+# Copiamos apenas a pasta node_modules pronta do estágio anterior
+# Isso pula completamente o 'npm install' problemático nesta imagem
+COPY --from=builder /app/node_modules ./node_modules
 
-# 5. Instala os navegadores do Playwright
+# Instalamos apenas os navegadores necessários (este comando não usa tokens de registro)
 RUN npx playwright install chromium
 
-# Porta configurada no Coolify
+# Configuração de porta para o Coolify
 EXPOSE 3001
 
-# 6. Comando de execução garantindo que ele não tente baixar nada novamente
-CMD ["npx", "-y", "@modelcontextprotocol/server-playwright", "--sse"]
+# Comando final usando o binário que já foi baixado no estágio anterior
+CMD ["./node_modules/.bin/mcp-server-playwright", "--sse"]
