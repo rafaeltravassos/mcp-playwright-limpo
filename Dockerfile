@@ -1,21 +1,16 @@
-# Estágio de Build
-FROM node:20-slim AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-# Estágio de Execução
 FROM node:20-slim
 WORKDIR /app
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/build ./build
-RUN npm install --omit=dev
+
+# Copia os arquivos de configuração
+COPY package*.json ./
+RUN npm install
+
+# Copia o código do servidor
+COPY index.js ./
 
 # Configurações de Rede
 ENV BROWSER_WS_ENDPOINT=ws://browserless-agencia:3000
 EXPOSE 3001
 
-# Comando de início
-CMD ["node", "build/index.js"]
+# Inicia o servidor sem argumentos extras para evitar erros
+CMD ["node", "index.js"]
