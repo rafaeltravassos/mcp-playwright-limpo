@@ -1,36 +1,21 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import express from "express";
-import { chromium } from "playwright-core";
+# Estágio de Build
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
 
-const app = express();
-const BROWSER_WS_ENDPOINT = process.env.BROWSER_WS_ENDPOINT || "ws://browserless-agencia:3000";
+# Estágio de Execução
+FROM node:20-slim
+WORKDIR /app
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/build ./build
+RUN npm install --omit=dev
 
-const server = new Server({
-    name: "zzapp-playwright-agencia",
-    version: "1.0.0",
-}, {
-    capabilities: { tools: {} },
-});
+# Configurações de Rede
+ENV BROWSER_WS_ENDPOINT=ws://browserless-agencia:3000
+EXPOSE 3001
 
-// Handler SSE para manter a conexão ativa
-let transport: SSEServerTransport | null = null;
-
-app.get("/sse", async (req, res) => {
-    console.log("Novo cliente de IA conectado via SSE");
-    transport = new SSEServerTransport("/messages", res);
-    await server.connect(transport);
-});
-
-app.post("/messages", async (req, res) => {
-    if (transport) {
-        await transport.handlePostMessage(req, res);
-    }
-});
-
-// Adicione aqui os seus handlers de ferramentas (navigate, screenshot, etc)
-
-const PORT = 3001;
-app.listen(PORT, () => {
-    console.log(`🚀 Motorista da Agência pronto na porta ${PORT}`);
-});
+# Comando de início
+CMD ["node", "build/index.js"]
