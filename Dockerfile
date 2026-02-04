@@ -1,15 +1,36 @@
-FROM node:20-slim
-WORKDIR /app
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import express from "express";
+import { chromium } from "playwright-core";
 
-# Instalação direta da fonte oficial para evitar pacotes quebrados
-RUN npm install -g @playwright/mcp@latest
+const app = express();
+const BROWSER_WS_ENDPOINT = process.env.BROWSER_WS_ENDPOINT || "ws://browserless-agencia:3000";
 
-# Variáveis de Ambiente da Agência
-ENV BROWSER_WS_ENDPOINT=ws://browserless-agencia:3000
-ENV MCP_PLAYWRIGHT_PERSISTENCE_PATH=/app/storage/auth.json
+const server = new Server({
+    name: "zzapp-playwright-agencia",
+    version: "1.0.0",
+}, {
+    capabilities: { tools: {} },
+});
 
-# Criação da pasta para cookies e sessões da ZZapp Money
-RUN mkdir -p /app/storage
+// Handler SSE para manter a conexão ativa
+let transport: SSEServerTransport | null = null;
 
-# Comando para iniciar com todas as ferramentas habilitadas
-CMD ["npx", "@playwright/mcp", "run"]
+app.get("/sse", async (req, res) => {
+    console.log("Novo cliente de IA conectado via SSE");
+    transport = new SSEServerTransport("/messages", res);
+    await server.connect(transport);
+});
+
+app.post("/messages", async (req, res) => {
+    if (transport) {
+        await transport.handlePostMessage(req, res);
+    }
+});
+
+// Adicione aqui os seus handlers de ferramentas (navigate, screenshot, etc)
+
+const PORT = 3001;
+app.listen(PORT, () => {
+    console.log(`🚀 Motorista da Agência pronto na porta ${PORT}`);
+});
